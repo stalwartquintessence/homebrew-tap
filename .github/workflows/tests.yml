@@ -1,0 +1,35 @@
+name: Tests
+
+# Check the cask the way Homebrew does, then install and uninstall it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # the update workflow starts this after it changes the cask
+
+permissions:
+  contents: read
+
+jobs:
+  cask:
+    name: Audit and install
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Set up Homebrew and this tap
+        uses: Homebrew/actions/setup-homebrew@63a2d4d8d4193eab3e62b1b782ff3ab8408f5b29 # main, 2026-11-10
+
+      - name: Trust this tap
+        run: brew trust --tap stalwartquintessence/tap
+
+      - name: Style
+        run: brew style --cask stalwartquintessence/tap/candela
+
+      - name: Audit
+        run: brew audit --cask --strict --online stalwartquintessence/tap/candela
+
+      - name: Install and uninstall
+        run: |
+          brew install --cask stalwartquintessence/tap/candela
+          test -x "$(brew --prefix)/bin/candelactl"
+          brew uninstall --cask candela

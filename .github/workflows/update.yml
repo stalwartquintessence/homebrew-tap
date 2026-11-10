@@ -1,0 +1,55 @@
+name: Update
+
+# Once a day, move the cask to Candela's latest release, then run the tests on the result.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write # commit the new version
+  actions: write # start the tests workflow
+
+jobs:
+  update:
+    name: Update the cask
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Update to the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=$(gh release view --repo stalwartquintessence/candela --json tagName --jq .tagName)
+          VERSION=${TAG#v}
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected release tag: $TAG"
+            exit 1
+          fi
+          CURRENT=$(sed -n 's/^  version "\(.*\)"$/\1/p' Casks/candela.rb)
+          if [ "$VERSION" = "$CURRENT" ]; then
+            echo "Already at the latest release, $CURRENT."
+            exit 0
+          fi
+
+          # Hash the disk image ourselves and check it against the release's SHA256SUMS.txt.
+          BASE="https://github.com/stalwartquintessence/candela/releases/download/$TAG"
+          curl -sSfL -o "$RUNNER_TEMP/candela.dmg" "$BASE/Candela-$VERSION.dmg"
+          SHA=$(sha256sum "$RUNNER_TEMP/candela.dmg" | cut -d' ' -f1)
+          LISTED=$(curl -sSfL "$BASE/SHA256SUMS.txt" | awk -v f="Candela-$VERSION.dmg" '$2 == f { print $1 }')
+          if [ "$SHA" != "$LISTED" ]; then
+            echo "::error::Candela-$VERSION.dmg hashes to $SHA, but SHA256SUMS.txt lists $LISTED"
+            exit 1
+          fi
+
+          sed -i -e "s/^  version \".*\"$/  version \"$VERSION\"/" \
+                 -e "s/^  sha256 \".*\"$/  sha256 \"$SHA\"/" Casks/candela.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: update candela to $VERSION"
+          git push
+          # Pushes made with this workflow's token do not start other workflows on their own.
+          gh workflow run tests.yml --ref main
