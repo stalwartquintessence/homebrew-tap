@@ -23,7 +23,7 @@ Candela is free and not notarized by Apple, so macOS blocks its first launch: op
 Candela installs its own updates: **Check for Updates...** in its window, or
 **Check for Updates Automatically**. The cask says so (`auto_updates true`), so `brew upgrade`
 leaves Candela alone; `brew upgrade --cask --greedy candela` replaces it anyway. Version 0.1.0
-could not update itself: if you have it, run `brew upgrade --cask candela` once.
+could not update itself: if you have it, run `brew upgrade --cask --greedy candela` once.
 
 ## Uninstall
 
